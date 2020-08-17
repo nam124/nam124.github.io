@@ -1,0 +1,48 @@
+body{
+	animation: ha 10s both ;
+	
+}
+@keyframes ha {
+	0% {
+		background: url("image1/1.jpg") 300px  fixed no-repeat;
+	}
+	7.14% {
+		background: url("image1/2.jpg") 300px  fixed no-repeat;
+	}
+	14.29% {
+		background: url("image1/3.jpg") 300px  fixed no-repeat;
+	}
+	21.42% {
+		background: url("image1/4.jpg") 500px   fixed no-repeat;
+	}
+	29.76% {
+		background: url("image1/5.jpg") 500px   fixed no-repeat;
+	}
+	37.2% {
+		background: url("image1/6.jpg") 400px  fixed no-repeat;
+	}
+	44.64% {
+		background: url("image1/7.jpg") 400px  fixed no-repeat;
+	}
+	52.08% {
+		background: url("image1/8.jpg") 400px  fixed no-repeat;
+	}
+	59.52% {
+		background: url("image1/9.jpg") 400px  fixed no-repeat;
+	}
+	64.26% {
+		background: url("image1/10.jpg") 400px   fixed no-repeat;
+	}
+	71.4% {
+		background: url("image1/11.jpg") 400px   fixed no-repeat;
+	}
+	78.54% {
+		background: url("image1/12.jpg") 400px   fixed no-repeat;
+	}
+	85.68% {
+		background: url("image1/end.jpg") 400px  fixed no-repeat;
+	}
+	100% {
+		background: url("image1/end.jpg") 400px  fixed no-repeat ;
+	}
+}
