@@ -1,17 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Fireworks</title>
+  <title>Ian & Kelly - Us and Them</title>
   <style>
-    html, body {
-      height: 100%;
-      padding: 0;
+    * {
+      box-sizing: border-box;
       margin: 0;
-      background: #000;
-      overflow: hidden;
+      padding: 0;
     }
-    
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #08080c;
+      overflow: hidden;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* Ảnh nền kết hợp hiệu ứng chuyển từ Đen Trắng sang Có Màu */
     .bg-image {
       position: absolute;
       top: 0;
@@ -19,12 +25,16 @@
       width: 100%;
       height: 100%;
       background-image: url('image_2feac3.jpg');
-      /* contain giúp ảnh hiển thị toàn bộ, không bị zoom cắt viền */
-      background-size: contain; 
+      background-size: contain;
       background-repeat: no-repeat;
       background-position: center;
-      filter: grayscale(100%) brightness(0.5);
+      filter: grayscale(100%) brightness(0.45) contrast(1.1);
+      transition: filter 2.5s ease-in-out;
       z-index: 0;
+    }
+
+    .bg-image.colorized {
+      filter: grayscale(0%) brightness(0.8) contrast(1.05);
     }
 
     canvas {
@@ -34,208 +44,496 @@
       width: 100%;
       height: 100%;
       z-index: 1;
-      background: transparent;
     }
 
-    /* Màn hình chờ bắt buộc để trình duyệt cho phép phát âm thanh */
-    #start-overlay {
+    /* Giao diện HUD phong cách game cổ điển */
+    .game-hud {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.85);
-      z-index: 10;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
       display: flex;
-      justify-content: center;
       align-items: center;
-      color: white;
-      font-family: Arial, sans-serif;
-      font-size: 22px;
-      cursor: pointer;
+      gap: 20px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 16px;
+      letter-spacing: 2px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+      pointer-events: none;
+    }
+
+    /* Phụ đề phim ở cạnh dưới */
+    .subtitle-box {
+      position: absolute;
+      bottom: 32px;
+      width: 100%;
       text-align: center;
+      z-index: 2;
+      pointer-events: none;
+      padding: 0 20px;
+    }
+
+    .subtitle-vi {
+      color: #ffffff;
+      font-size: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
+      transition: opacity 0.8s ease, color 1.5s ease;
+    }
+
+    .subtitle-en {
+      color: rgba(255, 255, 255, 0.65);
+      font-size: 13px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-style: italic;
+      margin-top: 6px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+      transition: opacity 0.8s ease;
     }
   </style>
 </head>
 <body>
-  <div class="bg-image"></div>
-  
-  <!-- Overlay yêu cầu click để mở khóa âm thanh -->
-  <div id="start-overlay">Bấm vào đây để bắt đầu (Kích hoạt âm thanh)</div>
-  
-  <canvas id="canvas"></canvas>
 
-  <audio id="explosion-sound" src="https://upload.wikimedia.org/wikipedia/commons/a/a2/Explosion_2.ogg" preload="auto"></audio>
+  <div class="bg-image" id="bgImage"></div>
+
+  <div class="game-hud">
+    <span>PLAYER: IAN</span>
+    <span id="hudHeart" style="color: #777; transition: color 1s;">❤</span>
+    <span>TARGET: KELLY</span>
+  </div>
+
+  <div class="subtitle-box">
+    <div class="subtitle-vi" id="subVi">Nếu Ian không tìm thấy Kelly, thế giới sẽ chẳng còn màu sắc...</div>
+    <div class="subtitle-en" id="subEn">"If Ian cannot find Kelly, then the world will have no color."</div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
 
   <script>
-    const canvas = document.getElementById('canvas');
+    const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const bgImage = document.getElementById('bgImage');
+    const subVi = document.getElementById('subVi');
+    const subEn = document.getElementById('subEn');
+    const hudHeart = document.getElementById('hudHeart');
+
     let cw = window.innerWidth;
     let ch = window.innerHeight;
     canvas.width = cw;
     canvas.height = ch;
-
-    let fireworks = [];
-    let particles = [];
-    let hue = 120;
-    let hasStarted = false;
-    
-    const audioSource = document.getElementById('explosion-sound');
-
-    // Mở khóa âm thanh và bắt đầu khi người dùng click
-    document.getElementById('start-overlay').addEventListener('click', function() {
-      this.style.display = 'none'; // Ẩn màn hình chờ
-      
-      // Mở khóa âm thanh
-      let initSound = audioSource.cloneNode();
-      initSound.volume = 0.01;
-      initSound.play().catch(e => console.log(e));
-      
-      hasStarted = true;
-      shootFirework(); // Bắn quả đầu tiên ngay lập tức
-    });
-
-    function playExplosion() {
-      let sound = audioSource.cloneNode();
-      sound.volume = 0.5;
-      sound.play().catch(e => console.log(e));
-    }
-
-    function random(min, max) {
-      return Math.random() * (max - min) + min;
-    }
-
-    function shootFirework() {
-      // Bắn 1 quả từ giữa màn hình dưới lên
-      fireworks.push(new Firework(cw / 2, ch, cw / 2, random(ch * 0.1, ch * 0.3)));
-    }
-
-    class Firework {
-      constructor(sx, sy, tx, ty) {
-        this.x = sx;
-        this.y = sy;
-        this.sx = sx;
-        this.sy = sy;
-        this.tx = tx;
-        this.ty = ty;
-        this.distanceToTarget = Math.hypot(tx - sx, ty - sy);
-        this.distanceTraveled = 0;
-        this.coordinates = [];
-        this.coordinateCount = 3;
-        while (this.coordinateCount--) {
-          this.coordinates.push([this.x, this.y]);
-        }
-        this.angle = Math.atan2(ty - sy, tx - sx);
-        this.speed = 2;
-        this.acceleration = 1.05;
-        this.brightness = random(50, 70);
-      }
-      update(index) {
-        this.coordinates.pop();
-        this.coordinates.unshift([this.x, this.y]);
-        this.speed *= this.acceleration;
-        let vx = Math.cos(this.angle) * this.speed;
-        let vy = Math.sin(this.angle) * this.speed;
-        this.distanceTraveled = Math.hypot(this.x + vx - this.sx, this.y + vy - this.sy);
-        
-        if (this.distanceTraveled >= this.distanceToTarget) {
-          createParticles(this.tx, this.ty);
-          playExplosion();
-          fireworks.splice(index, 1);
-        } else {
-          this.x += vx;
-          this.y += vy;
-        }
-      }
-      draw() {
-        ctx.beginPath();
-        ctx.moveTo(this.coordinates[this.coordinates.length - 1][0], this.coordinates[this.coordinates.length - 1][1]);
-        ctx.lineTo(this.x, this.y);
-        ctx.strokeStyle = `hsl(${hue}, 100%, ${this.brightness}%)`;
-        ctx.stroke();
-      }
-    }
-
-    class Particle {
-      constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.coordinates = [];
-        this.coordinateCount = 5;
-        while (this.coordinateCount--) {
-          this.coordinates.push([this.x, this.y]);
-        }
-        this.angle = random(0, Math.PI * 2);
-        this.speed = random(2, 18); // Tăng tốc độ văng để nổ to hơn
-        this.friction = 0.93;
-        this.gravity = 0.8;
-        this.hue = random(hue - 50, hue + 50);
-        this.brightness = random(50, 80);
-        this.alpha = 1;
-        this.decay = random(0.01, 0.02); // Sáng lâu hơn một chút
-      }
-      update(index) {
-        this.coordinates.pop();
-        this.coordinates.unshift([this.x, this.y]);
-        this.speed *= this.friction;
-        this.x += Math.cos(this.angle) * this.speed;
-        this.y += Math.sin(this.angle) * this.speed + this.gravity;
-        this.alpha -= this.decay;
-        if (this.alpha <= this.decay) {
-          particles.splice(index, 1);
-        }
-      }
-      draw() {
-        ctx.beginPath();
-        ctx.moveTo(this.coordinates[this.coordinates.length - 1][0], this.coordinates[this.coordinates.length - 1][1]);
-        ctx.lineTo(this.x, this.y);
-        ctx.strokeStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
-        ctx.stroke();
-      }
-    }
-
-    function createParticles(x, y) {
-      let particleCount = 500; // Tăng số lượng hạt lên 500 để nổ thật rực rỡ
-      while (particleCount--) {
-        particles.push(new Particle(x, y));
-      }
-    }
-
-    function loop() {
-      requestAnimationFrame(loop);
-      hue += 0.5;
-      
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Giảm mờ để đuôi pháo hoa dài hơn
-      ctx.fillRect(0, 0, cw, ch);
-      ctx.globalCompositeOperation = 'lighter';
-
-      let i = fireworks.length;
-      while (i--) {
-        fireworks[i].draw();
-        fireworks[i].update(i);
-      }
-
-      let j = particles.length;
-      while (j--) {
-        particles[j].draw();
-        particles[j].update(j);
-      }
-
-      // Chỉ bắn 1 quả tiếp theo khi màn hình gần như đã sạch pháo hoa
-      if (hasStarted && fireworks.length === 0 && particles.length <= 10) {
-        if (Math.random() < 0.05) {
-          shootFirework();
-        }
-      }
-    }
 
     window.addEventListener('resize', () => {
       cw = window.innerWidth;
       ch = window.innerHeight;
       canvas.width = cw;
       canvas.height = ch;
+      resetSceneMetrics();
     });
+
+    // Trạng thái câu chuyện: 'SEARCHING' -> 'REUNITING' -> 'COLORFUL' -> 'RESETTING'
+    let state = 'SEARCHING';
+    let stateTimer = 0;
+    let colorWaveRadius = 0;
+    let maxWaveRadius = Math.hypot(cw, ch);
+    let groundY = ch * 0.78;
+
+    const ian = { x: 0, y: 0, speed: 1.8, step: 0 };
+    const kelly = { x: 0, y: 0, bounce: 0 };
+
+    function resetSceneMetrics() {
+      groundY = ch * 0.78;
+      maxWaveRadius = Math.hypot(cw, ch);
+      kelly.x = cw * 0.72;
+      kelly.y = groundY;
+      if (state === 'SEARCHING' && ian.x === 0) {
+        ian.x = cw * 0.18;
+      }
+      ian.y = groundY;
+    }
+
+    resetSceneMetrics();
+    ian.x = cw * 0.18;
+
+    // Hệ thống hạt: Tuyết rơi (khi đen trắng) & Hoa anh đào / Đom đóm (khi có màu)
+    const particles = [];
+    const PARTICLE_COUNT = 75;
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particles.push({
+        x: Math.random() * cw,
+        y: Math.random() * ch,
+        size: Math.random() * 3.5 + 1.5,
+        speedX: Math.random() * 0.8 - 0.4,
+        speedY: Math.random() * 1.2 + 0.6,
+        angle: Math.random() * Math.PI * 2,
+        spin: (Math.random() - 0.5) * 0.04
+      });
+    }
+
+    // Hệ thống trái tim bay lên khi gặp nhau
+    const hearts = [];
+
+    function spawnHeart(x, y) {
+      hearts.push({
+        x: x + (Math.random() - 0.5) * 30,
+        y: y - 45,
+        size: Math.random() * 8 + 8,
+        vy: Math.random() * 1 + 0.8,
+        alpha: 1
+      });
+    }
+
+    // Nhạc hộp (Music Box) tự động bằng Web Audio API
+    let audioCtx = null;
+    function playNote(freq, delay, duration) {
+      if (!audioCtx || audioCtx.state !== 'running') return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+
+      gain.gain.setValueAtTime(0.001, audioCtx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.08, audioCtx.currentTime + delay + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + delay + duration);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + delay);
+      osc.stop(audioCtx.currentTime + delay + duration);
+    }
+
+    function playReunionMelody() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const notes = [523.25, 659.25, 783.99, 1046.5, 987.77, 783.99, 1046.5];
+        notes.forEach((n, idx) => playNote(n, idx * 0.35, 1.4));
+      } catch (e) {}
+    }
+
+    window.addEventListener('click', () => {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    });
+
+    // Vẽ cây anh đào & đèn đường ở vị trí Kelly đứng đợi
+    function drawEnvironment(isColor) {
+      const treeX = kelly.x + 65;
+      const lampX = kelly.x - 45;
+
+      // Mặt đất
+      ctx.strokeStyle = isColor ? 'rgba(255, 182, 193, 0.5)' : 'rgba(180, 180, 180, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cw * 0.08, groundY);
+      ctx.lineTo(cw * 0.92, groundY);
+      ctx.stroke();
+
+      // Đèn đường
+      ctx.strokeStyle = isColor ? '#5a4d41' : '#555';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(lampX, groundY);
+      ctx.lineTo(lampX, groundY - 95);
+      ctx.lineTo(lampX + 18, groundY - 95);
+      ctx.stroke();
+
+      // Ánh sáng đèn đường
+      const lampGrad = ctx.createRadialGradient(lampX + 18, groundY - 90, 2, lampX + 18, groundY - 40, 85);
+      if (isColor) {
+        lampGrad.addColorStop(0, 'rgba(255, 230, 150, 0.85)');
+        lampGrad.addColorStop(1, 'rgba(255, 200, 100, 0)');
+      } else {
+        lampGrad.addColorStop(0, 'rgba(220, 220, 220, 0.45)');
+        lampGrad.addColorStop(1, 'rgba(220, 220, 220, 0)');
+      }
+      ctx.fillStyle = lampGrad;
+      ctx.beginPath();
+      ctx.arc(lampX + 18, groundY - 55, 85, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Thân cây
+      ctx.strokeStyle = isColor ? '#5c4033' : '#444';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(treeX, groundY);
+      ctx.lineTo(treeX, groundY - 80);
+      ctx.lineTo(treeX - 25, groundY - 120);
+      ctx.moveTo(treeX, groundY - 65);
+      ctx.lineTo(treeX + 28, groundY - 110);
+      ctx.stroke();
+
+      // Tán hoa anh đào (Chỉ nở rộ khi có màu, lúc đen trắng là cành khô điểm xuyết)
+      const blossoms = [
+        { dx: -25, dy: -125, r: 22 },
+        { dx: 0, dy: -135, r: 28 },
+        { dx: 28, dy: -115, r: 24 },
+        { dx: -10, dy: -105, r: 20 },
+        { dx: 15, dy: -100, r: 18 }
+      ];
+      blossoms.forEach(b => {
+        ctx.beginPath();
+        ctx.arc(treeX + b.dx, groundY + b.dy, isColor ? b.r : b.r * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = isColor ? 'rgba(255, 165, 195, 0.75)' : 'rgba(130, 130, 130, 0.25)';
+        ctx.fill();
+      });
+    }
+
+    // Vẽ nhân vật Ian (Chàng trai)
+    function drawIan(x, y, step, isColor) {
+      ctx.save();
+      const bob = Math.abs(Math.sin(step)) * 4;
+      const legSwing = Math.sin(step) * 7;
+
+      // Chân
+      ctx.strokeStyle = isColor ? '#2b3a4a' : '#777';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(x - 3, y - 16);
+      ctx.lineTo(x - 3 - legSwing, y);
+      ctx.moveTo(x + 3, y - 16);
+      ctx.lineTo(x + 3 + legSwing, y);
+      ctx.stroke();
+
+      // Áo khoác
+      ctx.fillStyle = isColor ? '#3b7dd8' : '#888';
+      ctx.beginPath();
+      ctx.roundRect(x - 10, y - 38 - bob, 20, 24, 5);
+      ctx.fill();
+
+      // Đầu
+      ctx.fillStyle = isColor ? '#ffe0bd' : '#ccc';
+      ctx.beginPath();
+      ctx.arc(x, y - 48 - bob, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tóc
+      ctx.fillStyle = isColor ? '#2c221e' : '#333';
+      ctx.beginPath();
+      ctx.arc(x, y - 50 - bob, 10.5, Math.PI, Math.PI * 2.1);
+      ctx.fill();
+
+      // Khăn choàng cổ bay trong gió
+      ctx.fillStyle = isColor ? '#4facfe' : '#aaa';
+      ctx.fillRect(x - 9, y - 40 - bob, 18, 5);
+      ctx.beginPath();
+      ctx.moveTo(x - 7, y - 38 - bob);
+      ctx.quadraticCurveTo(x - 22, y - 36 - bob + Math.sin(step * 2) * 4, x - 26, y - 30 - bob);
+      ctx.lineTo(x - 22, y - 26 - bob);
+      ctx.quadraticCurveTo(x - 15, y - 32 - bob, x - 5, y - 35 - bob);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // Vẽ nhân vật Kelly (Cô gái)
+    function drawKelly(x, y, bounce, isColor) {
+      ctx.save();
+
+      // Chân
+      ctx.strokeStyle = isColor ? '#4a3531' : '#777';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(x - 4, y - 14 - bounce);
+      ctx.lineTo(x - 4, y - bounce);
+      ctx.moveTo(x + 4, y - 14 - bounce);
+      ctx.lineTo(x + 4, y - bounce);
+      ctx.stroke();
+
+      // Váy / Áo khoác dạ
+      ctx.fillStyle = isColor ? '#ff5e7e' : '#999';
+      ctx.beginPath();
+      ctx.moveTo(x - 8, y - 36 - bounce);
+      ctx.lineTo(x + 8, y - 36 - bounce);
+      ctx.lineTo(x + 13, y - 12 - bounce);
+      ctx.lineTo(x - 13, y - 12 - bounce);
+      ctx.closePath();
+      ctx.fill();
+
+      // Đầu
+      ctx.fillStyle = isColor ? '#ffe0bd' : '#ccc';
+      ctx.beginPath();
+      ctx.arc(x, y - 46 - bounce, 9.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tóc dài
+      ctx.fillStyle = isColor ? '#3b2314' : '#333';
+      ctx.beginPath();
+      ctx.arc(x, y - 48 - bounce, 10, Math.PI * 0.85, Math.PI * 2.15);
+      ctx.fill();
+      ctx.fillRect(x + 4, y - 46 - bounce, 5, 14);
+
+      // Khăn choàng đỏ
+      ctx.fillStyle = isColor ? '#ff2a55' : '#666';
+      ctx.fillRect(x - 8, y - 38 - bounce, 16, 4.5);
+
+      ctx.restore();
+    }
+
+    // Vẽ biểu tượng Trái Tim
+    function drawHeartShape(x, y, size, alpha) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = `rgba(255, 60, 110, ${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-size / 2, -size / 2, -size, size / 3, 0, size);
+      ctx.bezierCurveTo(size, size / 3, size / 2, -size / 2, 0, 0);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Vẽ cảnh tổng hợp (Hỗ trợ cả chế độ Đen Trắng và Có Màu)
+    function renderWorld(isColor) {
+      drawEnvironment(isColor);
+      drawKelly(kelly.x, kelly.y, kelly.bounce, isColor);
+      drawIan(ian.x, ian.y, ian.step, isColor);
+
+      // Vẽ hạt thời tiết (Tuyết trắng hoặc Hoa anh đào hồng)
+      particles.forEach(p => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        if (isColor) {
+          // Cánh hoa anh đào hồng
+          ctx.fillStyle = 'rgba(255, 175, 200, 0.85)';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, p.size * 1.6, p.size * 0.9, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Hạt tuyết trắng xám
+          ctx.fillStyle = 'rgba(210, 210, 210, 0.65)';
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size * 0.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+    }
+
+    function update() {
+      // Cập nhật hạt rơi
+      particles.forEach(p => {
+        p.x += p.speedX + (state === 'COLORFUL' ? 0.3 : -0.2);
+        p.y += p.speedY;
+        p.angle += p.spin;
+        if (p.y > ch) {
+          p.y = -10;
+          p.x = Math.random() * cw;
+        }
+        if (p.x > cw) p.x = 0;
+        if (p.x < 0) p.x = cw;
+      });
+
+      // Cập nhật trái tim bay
+      for (let i = hearts.length - 1; i >= 0; i--) {
+        hearts[i].y -= hearts[i].vy;
+        hearts[i].alpha -= 0.012;
+        if (hearts[i].alpha <= 0) hearts.splice(i, 1);
+      }
+
+      // Máy trạng thái kịch bản Ian & Kelly
+      if (state === 'SEARCHING') {
+        const targetX = kelly.x - 24;
+        if (ian.x < targetX) {
+          ian.x += ian.speed;
+          ian.step += 0.14;
+          // Khi Ian đến gần, Kelly nhún nhảy vui mừng
+          if (targetX - ian.x < 90) {
+            kelly.bounce = Math.abs(Math.sin(ian.step * 1.5)) * 5;
+          }
+        } else {
+          // Ian đã chạm tới Kelly -> Kích hoạt vòng sóng màu sắc
+          state = 'REUNITING';
+          kelly.bounce = 0;
+          colorWaveRadius = 5;
+          bgImage.classList.add('colorized');
+          hudHeart.style.color = '#ff3366';
+          subVi.textContent = 'Ian đã tìm thấy Kelly. Thế giới lại rực rỡ sắc màu.';
+          subVi.style.color = '#ffccd7';
+          subEn.textContent = '"Ian found Kelly. The world is full of color again."';
+          playReunionMelody();
+          spawnHeart((ian.x + kelly.x) / 2, ian.y);
+        }
+      } else if (state === 'REUNITING') {
+        colorWaveRadius += Math.max(12, maxWaveRadius * 0.025);
+        if (Math.random() < 0.15) {
+          spawnHeart((ian.x + kelly.x) / 2, ian.y);
+        }
+        if (colorWaveRadius >= maxWaveRadius) {
+          state = 'COLORFUL';
+          stateTimer = 0;
+        }
+      } else if (state === 'COLORFUL') {
+        stateTimer++;
+        kelly.bounce = Math.abs(Math.sin(stateTimer * 0.06)) * 2;
+        if (stateTimer % 25 === 0) {
+          spawnHeart((ian.x + kelly.x) / 2, ian.y);
+        }
+        // Giữ khung cảnh có màu trong khoảng 8 giây trước khi lặp lại
+        if (stateTimer > 480) {
+          state = 'RESETTING';
+          stateTimer = 0;
+          bgImage.classList.remove('colorized');
+          hudHeart.style.color = '#777';
+          subVi.textContent = 'Nếu Ian không tìm thấy Kelly, thế giới sẽ chẳng còn màu sắc...';
+          subVi.style.color = '#ffffff';
+          subEn.textContent = '"If Ian cannot find Kelly, then the world will have no color."';
+        }
+      } else if (state === 'RESETTING') {
+        stateTimer++;
+        if (stateTimer > 90) {
+          ian.x = cw * 0.12;
+          kelly.bounce = 0;
+          state = 'SEARCHING';
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, cw, ch);
+
+      if (state === 'SEARCHING' || state === 'RESETTING') {
+        renderWorld(false);
+      } else if (state === 'REUNITING') {
+        // Vẽ thế giới đen trắng bên ngoài
+        renderWorld(false);
+
+        // Vẽ vùng sóng tròn lan tỏa màu sắc từ vị trí Ian & Kelly nắm tay
+        const centerX = (ian.x + kelly.x) / 2;
+        const centerY = ian.y - 25;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, colorWaveRadius, 0, Math.PI * 2);
+        ctx.clip();
+
+        ctx.clearRect(0, 0, cw, ch);
+        renderWorld(true);
+        ctx.restore();
+
+        // Viền sáng của sóng màu
+        ctx.strokeStyle = 'rgba(255, 190, 210, 0.7)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, colorWaveRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (state === 'COLORFUL') {
+        renderWorld(true);
+      }
+
+      // Vẽ trái tim bay lên
+      hearts.forEach(h => drawHeartShape(h.x, h.y, h.size, h.alpha));
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
 
     loop();
   </script>
