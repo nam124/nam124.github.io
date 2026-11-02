@@ -10,7 +10,7 @@
       margin: 0;
       background: #000;
       overflow: hidden;
-      cursor: pointer;
+      cursor: default;
     }
     
     .bg-image {
@@ -19,10 +19,10 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background-image: url('image_2feac3.jpg');
+      background-image: url('image/image_2feac3.jpg');
       background-size: cover;
       background-position: center;
-      filter: grayscale(100%) brightness(0.5); /* Ảnh đen trắng, làm tối 50% để nổi pháo hoa */
+      filter: grayscale(100%) brightness(0.5);
       z-index: 0;
     }
 
@@ -35,32 +35,16 @@
       z-index: 1;
       background: transparent;
     }
-
-    #start-msg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: rgba(255, 255, 255, 0.9);
-      font-family: Arial, sans-serif;
-      z-index: 3;
-      font-size: 20px;
-      pointer-events: none;
-      transition: opacity 0.5s;
-    }
   </style>
 </head>
 <body>
   <!-- Ảnh nền -->
   <div class="bg-image"></div>
   
-  <!-- Dòng chữ hướng dẫn click -->
-  <div id="start-msg">Click vào màn hình để bật âm thanh & pháo hoa</div>
-  
   <canvas id="canvas"></canvas>
 
-  <!-- Thẻ audio ẩn giúp trình duyệt tải trước âm thanh tốt hơn -->
-  <audio id="explosion-sound" src="https://upload.wikimedia.org/wikipedia/commons/a/a2/Explosion_2.ogg" preload="auto"></audio>
+  <!-- Thêm autoplay để thử tự động phát nếu trình duyệt cho phép -->
+  <audio id="explosion-sound" src="https://upload.wikimedia.org/wikipedia/commons/a/a2/Explosion_2.ogg" preload="auto" autoplay></audio>
 
   <script>
     const canvas = document.getElementById('canvas');
@@ -74,27 +58,22 @@
     let particles = [];
     let hue = 120;
     
-    let audioEnabled = false;
     const audioSource = document.getElementById('explosion-sound');
-    
-    // Yêu cầu click để mở khóa âm thanh của trình duyệt
-    window.addEventListener('click', () => {
-      if (!audioEnabled) {
-        audioEnabled = true;
-        document.getElementById('start-msg').style.opacity = '0';
-        // Kích hoạt âm thanh lần đầu
-        let initSound = audioSource.cloneNode();
-        initSound.volume = 0.01;
-        initSound.play().catch(e => console.log("Audio unlock failed:", e));
-      }
-    });
 
+    // Hàm phát âm thanh
     function playExplosion() {
-      if (!audioEnabled) return;
       let sound = audioSource.cloneNode();
       sound.volume = 0.4;
-      sound.play().catch(e => console.log("Lỗi phát âm thanh:", e));
+      // Trình duyệt sẽ tự động chặn và báo lỗi ngầm nếu chưa click, ta dùng catch để bỏ qua lỗi này
+      sound.play().catch(e => {}); 
     }
+
+    // Đảm bảo âm thanh được mở khóa ngay khi có bất kỳ tương tác nào
+    window.addEventListener('click', () => {
+      let initSound = audioSource.cloneNode();
+      initSound.volume = 0.01;
+      initSound.play().catch(e => {});
+    }, { once: true });
 
     function random(min, max) {
       return Math.random() * (max - min) + min;
@@ -195,7 +174,6 @@
       requestAnimationFrame(loop);
       hue += 0.5;
       
-      // Xóa mờ canvas để tạo hiệu ứng đuôi pháo hoa mà không đè mất ảnh nền
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.fillRect(0, 0, cw, ch);
@@ -213,8 +191,8 @@
         particles[j].update(j);
       }
 
-      // Chỉ bắt đầu tự động bắn pháo hoa sau khi người dùng đã click
-      if (audioEnabled && Math.random() < 0.05) {
+      // Tự động bắn pháo hoa
+      if (Math.random() < 0.05) {
         fireworks.push(new Firework(cw / 2, ch, random(0, cw), random(0, ch / 2)));
       }
     }
