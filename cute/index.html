@@ -10,7 +10,6 @@
       margin: 0;
       background: #000;
       overflow: hidden;
-      cursor: default;
     }
     
     .bg-image {
@@ -20,7 +19,9 @@
       width: 100%;
       height: 100%;
       background-image: url('image_2feac3.jpg');
-      background-size: cover;
+      /* contain giúp ảnh hiển thị toàn bộ, không bị zoom cắt viền */
+      background-size: contain; 
+      background-repeat: no-repeat;
       background-position: center;
       filter: grayscale(100%) brightness(0.5);
       z-index: 0;
@@ -35,16 +36,36 @@
       z-index: 1;
       background: transparent;
     }
+
+    /* Màn hình chờ bắt buộc để trình duyệt cho phép phát âm thanh */
+    #start-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-family: Arial, sans-serif;
+      font-size: 22px;
+      cursor: pointer;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <!-- Ảnh nền -->
   <div class="bg-image"></div>
+  
+  <!-- Overlay yêu cầu click để mở khóa âm thanh -->
+  <div id="start-overlay">Bấm vào đây để bắt đầu (Kích hoạt âm thanh)</div>
   
   <canvas id="canvas"></canvas>
 
-  <!-- Thêm autoplay để thử tự động phát nếu trình duyệt cho phép -->
-  <audio id="explosion-sound" src="https://upload.wikimedia.org/wikipedia/commons/a/a2/Explosion_2.ogg" preload="auto" autoplay></audio>
+  <audio id="explosion-sound" src="https://upload.wikimedia.org/wikipedia/commons/a/a2/Explosion_2.ogg" preload="auto"></audio>
 
   <script>
     const canvas = document.getElementById('canvas');
@@ -57,26 +78,36 @@
     let fireworks = [];
     let particles = [];
     let hue = 120;
+    let hasStarted = false;
     
     const audioSource = document.getElementById('explosion-sound');
 
-    // Hàm phát âm thanh
-    function playExplosion() {
-      let sound = audioSource.cloneNode();
-      sound.volume = 0.4;
-      // Trình duyệt sẽ tự động chặn và báo lỗi ngầm nếu chưa click, ta dùng catch để bỏ qua lỗi này
-      sound.play().catch(e => {}); 
-    }
-
-    // Đảm bảo âm thanh được mở khóa ngay khi có bất kỳ tương tác nào
-    window.addEventListener('click', () => {
+    // Mở khóa âm thanh và bắt đầu khi người dùng click
+    document.getElementById('start-overlay').addEventListener('click', function() {
+      this.style.display = 'none'; // Ẩn màn hình chờ
+      
+      // Mở khóa âm thanh
       let initSound = audioSource.cloneNode();
       initSound.volume = 0.01;
-      initSound.play().catch(e => {});
-    }, { once: true });
+      initSound.play().catch(e => console.log(e));
+      
+      hasStarted = true;
+      shootFirework(); // Bắn quả đầu tiên ngay lập tức
+    });
+
+    function playExplosion() {
+      let sound = audioSource.cloneNode();
+      sound.volume = 0.5;
+      sound.play().catch(e => console.log(e));
+    }
 
     function random(min, max) {
       return Math.random() * (max - min) + min;
+    }
+
+    function shootFirework() {
+      // Bắn 1 quả từ giữa màn hình dưới lên
+      fireworks.push(new Firework(cw / 2, ch, cw / 2, random(ch * 0.1, ch * 0.3)));
     }
 
     class Firework {
@@ -135,13 +166,13 @@
           this.coordinates.push([this.x, this.y]);
         }
         this.angle = random(0, Math.PI * 2);
-        this.speed = random(1, 10);
-        this.friction = 0.95;
-        this.gravity = 1;
+        this.speed = random(2, 18); // Tăng tốc độ văng để nổ to hơn
+        this.friction = 0.93;
+        this.gravity = 0.8;
         this.hue = random(hue - 50, hue + 50);
         this.brightness = random(50, 80);
         this.alpha = 1;
-        this.decay = random(0.015, 0.03);
+        this.decay = random(0.01, 0.02); // Sáng lâu hơn một chút
       }
       update(index) {
         this.coordinates.pop();
@@ -164,7 +195,7 @@
     }
 
     function createParticles(x, y) {
-      let particleCount = 100;
+      let particleCount = 500; // Tăng số lượng hạt lên 500 để nổ thật rực rỡ
       while (particleCount--) {
         particles.push(new Particle(x, y));
       }
@@ -175,7 +206,7 @@
       hue += 0.5;
       
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Giảm mờ để đuôi pháo hoa dài hơn
       ctx.fillRect(0, 0, cw, ch);
       ctx.globalCompositeOperation = 'lighter';
 
@@ -191,9 +222,11 @@
         particles[j].update(j);
       }
 
-      // Tự động bắn pháo hoa
-      if (Math.random() < 0.05) {
-        fireworks.push(new Firework(cw / 2, ch, random(0, cw), random(0, ch / 2)));
+      // Chỉ bắn 1 quả tiếp theo khi màn hình gần như đã sạch pháo hoa
+      if (hasStarted && fireworks.length === 0 && particles.length <= 10) {
+        if (Math.random() < 0.05) {
+          shootFirework();
+        }
       }
     }
 
