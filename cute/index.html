@@ -12,6 +12,22 @@
       overflow: hidden;
       cursor: pointer;
     }
+    
+    /* Lớp background chứa ảnh đen trắng */
+    .bg-image {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url('image/image_2feac3.jpg');
+      background-size: cover;
+      background-position: center;
+      /* Chuyển thành đen trắng và giảm sáng để pháo hoa nổi bật */
+      filter: grayscale(100%) brightness(0.4);
+      z-index: 0;
+    }
+
     canvas {
       position: absolute;
       top: 0;
@@ -20,6 +36,7 @@
       height: 100%;
       z-index: 1;
     }
+
     .text-container {
       position: absolute;
       top: 50%;
@@ -34,22 +51,25 @@
       text-shadow: 0 0 15px rgba(255, 0, 128, 0.8), 0 0 30px rgba(255, 0, 128, 0.6);
       pointer-events: none;
     }
+
     #start-msg {
       position: absolute;
       top: 60%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: white;
+      color: rgba(255, 255, 255, 0.8);
       font-family: Arial, sans-serif;
       z-index: 3;
       font-size: 16px;
-      opacity: 0.7;
       pointer-events: none;
       transition: opacity 0.5s;
     }
   </style>
 </head>
 <body>
+  <!-- Thêm khối background vào dưới cùng -->
+  <div class="bg-image"></div>
+  
   <div class="text-container">
     NAM ❤ TRANG
   </div>
@@ -189,6 +209,7 @@
       requestAnimationFrame(loop);
       hue += 0.5;
       
+      // Hiệu ứng lưu ảnh nền trong suốt để tạo đuôi pháo hoa
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.fillRect(0, 0, cw, ch);
@@ -206,6 +227,7 @@
         particles[j].update(j);
       }
 
+      // Tốc độ bắn pháo hoa ngẫu nhiên
       if (Math.random() < 0.05) {
         fireworks.push(new Firework(cw / 2, ch, random(0, cw), random(0, ch / 2)));
       }
