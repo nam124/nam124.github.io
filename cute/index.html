@@ -109,9 +109,9 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const bgImage = document.getElementById('bgImage');
-    const subVi = document.getElementById('subVi');
+    const subVi = document.getElementById('subVi');       // có thể null nếu không có phần tử
     const subEn = document.getElementById('subEn');
-    const hudHeart = document.getElementById('hudHeart');
+    const hudHeart = document.getElementById('hudHeart'); // có thể null nếu không có phần tử
 
     let cw = window.innerWidth;
     let ch = window.innerHeight;
@@ -126,6 +126,13 @@
       resetSceneMetrics();
     });
 
+    // ===== Tham số tốc độ (chỉnh ở đây) =====
+    const WALK_SPEED = 0.9;        // tốc độ đi của Ian (cũ: 1.8)
+    const STEP_RATE = 0.07;        // nhịp bước chân (cũ: 0.14)
+    const WAVE_SPEED_RATIO = 0.015; // tốc độ lan sóng màu (cũ: 0.025)
+    const COLORFUL_FRAMES = 600;   // thời gian giữ cảnh có màu ~10s (cũ: 480)
+    const RESET_FRAMES = 120;      // nghỉ trước khi lặp lại ~2s (cũ: 90)
+
     // Trạng thái câu chuyện: 'SEARCHING' -> 'REUNITING' -> 'COLORFUL' -> 'RESETTING'
     let state = 'SEARCHING';
     let stateTimer = 0;
@@ -133,7 +140,7 @@
     let maxWaveRadius = Math.hypot(cw, ch);
     let groundY = ch * 0.78;
 
-    const ian = { x: 0, y: 0, speed: 1.8, step: 0 };
+    const ian = { x: 0, y: 0, speed: WALK_SPEED, step: 0 };
     const kelly = { x: 0, y: 0, bounce: 0 };
 
     function resetSceneMetrics() {
@@ -433,7 +440,7 @@
         const targetX = kelly.x - 24;
         if (ian.x < targetX) {
           ian.x += ian.speed;
-          ian.step += 0.14;
+          ian.step += STEP_RATE;
           // Khi Ian đến gần, Kelly nhún nhảy vui mừng
           if (targetX - ian.x < 90) {
             kelly.bounce = Math.abs(Math.sin(ian.step * 1.5)) * 5;
@@ -444,14 +451,14 @@
           kelly.bounce = 0;
           colorWaveRadius = 5;
           bgImage.classList.add('colorized');
-          hudHeart.style.color = '#ff3366';
-          subVi.style.color = '#ffccd7';
+          if (hudHeart) hudHeart.style.color = '#ff3366';
+          if (subVi) subVi.style.color = '#ffccd7';
           subEn.textContent = '"Ian found Kelly. The world is full of color again."';
           playReunionMelody();
           spawnHeart((ian.x + kelly.x) / 2, ian.y);
         }
       } else if (state === 'REUNITING') {
-        colorWaveRadius += Math.max(12, maxWaveRadius * 0.025);
+        colorWaveRadius += Math.max(6, maxWaveRadius * WAVE_SPEED_RATIO);
         if (Math.random() < 0.15) {
           spawnHeart((ian.x + kelly.x) / 2, ian.y);
         }
@@ -461,25 +468,30 @@
         }
       } else if (state === 'COLORFUL') {
         stateTimer++;
-        kelly.bounce = Math.abs(Math.sin(stateTimer * 0.06)) * 2;
-        if (stateTimer % 25 === 0) {
+        kelly.bounce = Math.abs(Math.sin(stateTimer * 0.04)) * 2;
+        if (stateTimer % 30 === 0) {
           spawnHeart((ian.x + kelly.x) / 2, ian.y);
         }
-        // Giữ khung cảnh có màu trong khoảng 8 giây trước khi lặp lại
-        if (stateTimer > 480) {
+        // Giữ khung cảnh có màu một lúc trước khi lặp lại
+        if (stateTimer > COLORFUL_FRAMES) {
           state = 'RESETTING';
           stateTimer = 0;
           bgImage.classList.remove('colorized');
-          hudHeart.style.color = '#777';
-          subVi.textContent = 'Nếu Ian không tìm thấy Kelly, thế giới sẽ chẳng còn màu sắc...';
-          subVi.style.color = '#ffffff';
+          if (hudHeart) hudHeart.style.color = '#777';
+          if (subVi) {
+            subVi.textContent = 'Nếu Ian không tìm thấy Kelly, thế giới sẽ chẳng còn màu sắc...';
+            subVi.style.color = '#ffffff';
+          }
           subEn.textContent = '"If Ian cannot find Kelly, then the world will have no color."';
         }
       } else if (state === 'RESETTING') {
         stateTimer++;
-        if (stateTimer > 90) {
+        if (stateTimer > RESET_FRAMES) {
           ian.x = cw * 0.12;
+          ian.step = 0;
           kelly.bounce = 0;
+          colorWaveRadius = 0;
+          stateTimer = 0;
           state = 'SEARCHING';
         }
       }
@@ -522,12 +534,17 @@
     }
 
     function loop() {
-      update();
-      draw();
+      // Đăng ký khung hình tiếp theo TRƯỚC, để dù có lỗi thì hoạt ảnh vẫn không dừng
       requestAnimationFrame(loop);
+      try {
+        update();
+        draw();
+      } catch (e) {
+        console.error(e);
+      }
     }
 
-    loop();
+    requestAnimationFrame(loop);
   </script>
 </body>
 </html>
