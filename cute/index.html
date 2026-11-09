@@ -2,6 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>N & T - Us and Them</title>
   <style>
     * {
@@ -61,6 +62,20 @@
       letter-spacing: 2px;
       text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
       pointer-events: none;
+      white-space: nowrap;
+    }
+
+    #hudHeart {
+      color: #777;
+      font-size: 20px;
+      transition: color 1.5s ease;
+    }
+
+    .hud-hint {
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.45);
+      transition: opacity 0.8s ease;
     }
 
     /* Phụ đề phim ở cạnh dưới */
@@ -74,22 +89,11 @@
       padding: 0 20px;
     }
 
-    .subtitle-vi {
-      color: #ffffff;
-      font-size: 20px;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-weight: 500;
-      letter-spacing: 0.5px;
-      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
-      transition: opacity 0.8s ease, color 1.5s ease;
-    }
-
     .subtitle-en {
       color: rgba(255, 255, 255, 0.65);
       font-size: 13px;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       font-style: italic;
-      margin-top: 6px;
       text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
       transition: opacity 0.8s ease;
     }
@@ -98,6 +102,13 @@
 <body>
 
   <div class="bg-image" id="bgImage"></div>
+
+  <!-- Nhạc nền: file abc.mp3 nằm cùng thư mục, tự lặp lại khi hết bài -->
+  <audio id="bgm" src="abc.mp3" loop autoplay preload="auto"></audio>
+
+  <div class="game-hud">
+    <span class="hud-hint" id="hudHint" style="opacity: 0"></span>
+  </div>
 
   <div class="subtitle-box">
     <div class="subtitle-en" id="subEn">"If Ian cannot find Kelly, then the world will have no color."</div>
@@ -109,9 +120,12 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const bgImage = document.getElementById('bgImage');
-    const subVi = document.getElementById('subVi');       // có thể null nếu không có phần tử
     const subEn = document.getElementById('subEn');
-    const hudHeart = document.getElementById('hudHeart'); // có thể null nếu không có phần tử
+    const hudHeart = document.getElementById('hudHeart');
+    const hudHint = document.getElementById('hudHint');
+
+    const TEXT_SEARCHING_EN = '"If Ian cannot find Kelly, then the world will have no color."';
+    const TEXT_FOUND_EN = '"Ian found Kelly. The world is full of color again."';
 
     let cw = window.innerWidth;
     let ch = window.innerHeight;
@@ -119,19 +133,28 @@
     canvas.height = ch;
 
     window.addEventListener('resize', () => {
+      const oldCw = cw;
+      const oldCh = ch;
       cw = window.innerWidth;
       ch = window.innerHeight;
       canvas.width = cw;
       canvas.height = ch;
+      // Giữ nguyên tỉ lệ vị trí để Ian không "nhảy" qua Kelly khi thu nhỏ cửa sổ
+      ian.x = ian.x / oldCw * cw;
+      particles.forEach(p => {
+        p.x = p.x / oldCw * cw;
+        p.y = p.y / oldCh * ch;
+      });
       resetSceneMetrics();
     });
 
-    // ===== Tham số tốc độ (chỉnh ở đây) =====
-    const WALK_SPEED = 0.9;        // tốc độ đi của Ian (cũ: 1.8)
-    const STEP_RATE = 0.07;        // nhịp bước chân (cũ: 0.14)
-    const WAVE_SPEED_RATIO = 0.015; // tốc độ lan sóng màu (cũ: 0.025)
-    const COLORFUL_FRAMES = 600;   // thời gian giữ cảnh có màu ~10s (cũ: 480)
-    const RESET_FRAMES = 120;      // nghỉ trước khi lặp lại ~2s (cũ: 90)
+    // ===== Tham số tốc độ (chỉnh ở đây) — tính theo khung 60fps cố định =====
+    const WALK_SPEED = 0.9;         // tốc độ đi của Ian
+    const STEP_RATE = 0.07;         // nhịp bước chân
+    const WAVE_SPEED_RATIO = 0.015; // tốc độ lan sóng màu
+    const COLORFUL_FRAMES = 600;    // thời gian giữ cảnh có màu ~10s
+    const RESET_FRAMES = 120;       // nghỉ trước khi lặp lại ~2s
+    const IAN_START_RATIO = 0.18;   // vị trí xuất phát của Ian (dùng cho cả lần đầu và mỗi vòng lặp)
 
     // Trạng thái câu chuyện: 'SEARCHING' -> 'REUNITING' -> 'COLORFUL' -> 'RESETTING'
     let state = 'SEARCHING';
@@ -140,7 +163,7 @@
     let maxWaveRadius = Math.hypot(cw, ch);
     let groundY = ch * 0.78;
 
-    const ian = { x: 0, y: 0, speed: WALK_SPEED, step: 0 };
+    const ian = { x: cw * IAN_START_RATIO, y: 0, speed: WALK_SPEED, step: 0 };
     const kelly = { x: 0, y: 0, bounce: 0 };
 
     function resetSceneMetrics() {
@@ -148,16 +171,12 @@
       maxWaveRadius = Math.hypot(cw, ch);
       kelly.x = cw * 0.72;
       kelly.y = groundY;
-      if (state === 'SEARCHING' && ian.x === 0) {
-        ian.x = cw * 0.18;
-      }
       ian.y = groundY;
     }
 
     resetSceneMetrics();
-    ian.x = cw * 0.18;
 
-    // Hệ thống hạt: Tuyết rơi (khi đen trắng) & Hoa anh đào / Đom đóm (khi có màu)
+    // Hệ thống hạt: Tuyết rơi (khi đen trắng) & Hoa anh đào (khi có màu)
     const particles = [];
     const PARTICLE_COUNT = 75;
 
@@ -186,37 +205,39 @@
       });
     }
 
-    // Nhạc hộp (Music Box) tự động bằng Web Audio API
-    let audioCtx = null;
-    function playNote(freq, delay, duration) {
-      if (!audioCtx || audioCtx.state !== 'running') return;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+    // ===== Nhạc nền (abc.mp3, lặp vô hạn nhờ thuộc tính loop) =====
+    const bgm = document.getElementById('bgm');
+    const BGM_VOLUME = 0.5;
+    bgm.volume = BGM_VOLUME;
 
-      gain.gain.setValueAtTime(0.001, audioCtx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.08, audioCtx.currentTime + delay + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + delay + duration);
-
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(audioCtx.currentTime + delay);
-      osc.stop(audioCtx.currentTime + delay + duration);
+    function startBgm() {
+      const p = bgm.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => {
+          hudHint.style.opacity = '0';
+        }).catch(() => {
+          // Trình duyệt chặn tự phát có tiếng -> hiện gợi ý, chờ người xem tương tác
+          hudHint.style.opacity = '1';
+        });
+      }
     }
 
-    function playReunionMelody() {
-      try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const notes = [523.25, 659.25, 783.99, 1046.5, 987.77, 783.99, 1046.5];
-        notes.forEach((n, idx) => playNote(n, idx * 0.35, 1.4));
-      } catch (e) {}
-    }
+    // Thử phát ngay khi mở trang
+    startBgm();
 
-    window.addEventListener('click', () => {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Nếu bị chặn tự phát: lần tương tác đầu tiên (click / chạm / phím) sẽ bật nhạc
+    function onFirstInteraction() {
+      if (bgm.paused) startBgm();
+      hudHint.style.opacity = '0';
+    }
+    ['click', 'touchstart', 'keydown'].forEach(evt => {
+      window.addEventListener(evt, onFirstInteraction);
+    });
+
+    // Không tìm thấy abc.mp3 -> ẩn gợi ý, phần hoạt ảnh vẫn chạy bình thường
+    bgm.addEventListener('error', () => {
+      hudHint.style.opacity = '0';
+      console.warn('Không tải được nhạc nền abc.mp3 (kiểm tra file cùng thư mục).');
     });
 
     // Vẽ cây anh đào & đèn đường ở vị trí Kelly đứng đợi
@@ -266,7 +287,7 @@
       ctx.lineTo(treeX + 28, groundY - 110);
       ctx.stroke();
 
-      // Tán hoa anh đào (Chỉ nở rộ khi có màu, lúc đen trắng là cành khô điểm xuyết)
+      // Tán hoa anh đào (nở rộ khi có màu, lúc đen trắng là cành khô điểm xuyết)
       const blossoms = [
         { dx: -25, dy: -125, r: 22 },
         { dx: 0, dy: -135, r: 28 },
@@ -280,6 +301,15 @@
         ctx.fillStyle = isColor ? 'rgba(255, 165, 195, 0.75)' : 'rgba(130, 130, 130, 0.25)';
         ctx.fill();
       });
+    }
+
+    // roundRect chưa có trên một số trình duyệt cũ -> dùng rect thường
+    function roundRectPath(x, y, w, h, r) {
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        ctx.rect(x, y, w, h);
+      }
     }
 
     // Vẽ nhân vật Ian (Chàng trai)
@@ -301,7 +331,7 @@
       // Áo khoác
       ctx.fillStyle = isColor ? '#3b7dd8' : '#888';
       ctx.beginPath();
-      ctx.roundRect(x - 10, y - 38 - bob, 20, 24, 5);
+      roundRectPath(x - 10, y - 38 - bob, 20, 24, 5);
       ctx.fill();
 
       // Đầu
@@ -386,25 +416,23 @@
       ctx.restore();
     }
 
-    // Vẽ cảnh tổng hợp (Hỗ trợ cả chế độ Đen Trắng và Có Màu)
+    // Vẽ cảnh tổng hợp (hỗ trợ cả chế độ Đen Trắng và Có Màu)
     function renderWorld(isColor) {
       drawEnvironment(isColor);
       drawKelly(kelly.x, kelly.y, kelly.bounce, isColor);
       drawIan(ian.x, ian.y, ian.step, isColor);
 
-      // Vẽ hạt thời tiết (Tuyết trắng hoặc Hoa anh đào hồng)
+      // Hạt thời tiết (Tuyết trắng hoặc Hoa anh đào hồng)
       particles.forEach(p => {
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.angle);
         if (isColor) {
-          // Cánh hoa anh đào hồng
           ctx.fillStyle = 'rgba(255, 175, 200, 0.85)';
           ctx.beginPath();
           ctx.ellipse(0, 0, p.size * 1.6, p.size * 0.9, 0, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Hạt tuyết trắng xám
           ctx.fillStyle = 'rgba(210, 210, 210, 0.65)';
           ctx.beginPath();
           ctx.arc(0, 0, p.size * 0.8, 0, Math.PI * 2);
@@ -412,6 +440,18 @@
         }
         ctx.restore();
       });
+    }
+
+    function setSearchingTexts() {
+      bgImage.classList.remove('colorized');
+      hudHeart.style.color = '#777';
+      subEn.textContent = TEXT_SEARCHING_EN;
+    }
+
+    function setFoundTexts() {
+      bgImage.classList.add('colorized');
+      hudHeart.style.color = '#ff3366';
+      subEn.textContent = TEXT_FOUND_EN;
     }
 
     function update() {
@@ -446,15 +486,11 @@
             kelly.bounce = Math.abs(Math.sin(ian.step * 1.5)) * 5;
           }
         } else {
-          // Ian đã chạm tới Kelly -> Kích hoạt vòng sóng màu sắc
+          // Ian đã chạm tới Kelly -> kích hoạt vòng sóng màu sắc
           state = 'REUNITING';
           kelly.bounce = 0;
           colorWaveRadius = 5;
-          bgImage.classList.add('colorized');
-          if (hudHeart) hudHeart.style.color = '#ff3366';
-          if (subVi) subVi.style.color = '#ffccd7';
-          subEn.textContent = '"Ian found Kelly. The world is full of color again."';
-          playReunionMelody();
+          setFoundTexts();
           spawnHeart((ian.x + kelly.x) / 2, ian.y);
         }
       } else if (state === 'REUNITING') {
@@ -476,18 +512,12 @@
         if (stateTimer > COLORFUL_FRAMES) {
           state = 'RESETTING';
           stateTimer = 0;
-          bgImage.classList.remove('colorized');
-          if (hudHeart) hudHeart.style.color = '#777';
-          if (subVi) {
-            subVi.textContent = 'Nếu Ian không tìm thấy Kelly, thế giới sẽ chẳng còn màu sắc...';
-            subVi.style.color = '#ffffff';
-          }
-          subEn.textContent = '"If Ian cannot find Kelly, then the world will have no color."';
+          setSearchingTexts();
         }
       } else if (state === 'RESETTING') {
         stateTimer++;
         if (stateTimer > RESET_FRAMES) {
-          ian.x = cw * 0.12;
+          ian.x = cw * IAN_START_RATIO;
           ian.step = 0;
           kelly.bounce = 0;
           colorWaveRadius = 0;
@@ -503,10 +533,10 @@
       if (state === 'SEARCHING' || state === 'RESETTING') {
         renderWorld(false);
       } else if (state === 'REUNITING') {
-        // Vẽ thế giới đen trắng bên ngoài
+        // Thế giới đen trắng bên ngoài
         renderWorld(false);
 
-        // Vẽ vùng sóng tròn lan tỏa màu sắc từ vị trí Ian & Kelly nắm tay
+        // Vùng sóng tròn lan tỏa màu sắc từ vị trí Ian & Kelly gặp nhau
         const centerX = (ian.x + kelly.x) / 2;
         const centerY = ian.y - 25;
 
@@ -529,15 +559,27 @@
         renderWorld(true);
       }
 
-      // Vẽ trái tim bay lên
+      // Trái tim bay lên
       hearts.forEach(h => drawHeartShape(h.x, h.y, h.size, h.alpha));
     }
 
-    function loop() {
+    // Vòng lặp bước cố định 60 lần/giây: tốc độ giống nhau trên màn 60Hz, 120Hz, 144Hz...
+    const STEP_MS = 1000 / 60;
+    let lastTime = null;
+    let accumulator = 0;
+
+    function loop(now) {
       // Đăng ký khung hình tiếp theo TRƯỚC, để dù có lỗi thì hoạt ảnh vẫn không dừng
       requestAnimationFrame(loop);
+      if (lastTime === null) lastTime = now;
+      // Giới hạn 250ms để khi quay lại tab sau thời gian dài, cảnh không "tua nhanh"
+      accumulator += Math.min(now - lastTime, 250);
+      lastTime = now;
       try {
-        update();
+        while (accumulator >= STEP_MS) {
+          update();
+          accumulator -= STEP_MS;
+        }
         draw();
       } catch (e) {
         console.error(e);
